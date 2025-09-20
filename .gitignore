@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 *.pyc
@@ -6,4 +7,14 @@ __pycache__/
 .venv/
 
 # Output files
+=======
+# Virtual env
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Output models
+>>>>>>> 87e59a5 (Initial commit: arrhythmia project setup)
 out/
