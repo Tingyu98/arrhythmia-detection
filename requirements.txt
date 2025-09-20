@@ -1,0 +1,13 @@
+wfdb
+neurokit2
+scipy
+numpy
+pandas
+scikit-learn
+matplotlib
+plotly
+streamlit
+torch
+torchvision
+torchaudio
+joblib
