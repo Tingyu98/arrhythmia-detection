@@ -56,7 +56,7 @@ if uploaded_file is not None:
 
         st.subheader("Baseline Predictions")
         st.write(pred_labels)
-
+        
         # Show counts as a bar chart
         counts = pd.Series(pred_labels).value_counts()
         st.bar_chart(counts)
