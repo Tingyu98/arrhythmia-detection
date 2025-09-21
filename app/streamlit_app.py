@@ -17,6 +17,7 @@ st.sidebar.header("⚙️ Settings")
 prob_threshold = st.sidebar.slider("Probability threshold", 0.0, 1.0, 0.6, 0.05)
 n_consecutive = st.sidebar.slider("N consecutive abnormal windows", 1, 10, 3)
 win_sec = st.sidebar.number_input("Window size (seconds)", 10, 60, 10)  # default 10s windows
+fs = st.sidebar.number_input("Sampling frequency (Hz)", 100, 1000, 360)  # default 360Hz
 
 # --- Load CNN model ---
 MODEL_PATH = "out/cnn.pth"
@@ -62,22 +63,33 @@ if uploaded_file is not None:
     # --- CASE 1: Feature dataset (baseline model) ---
     if "label" in df.columns:
         st.info("📊 Detected **feature dataset** → using baseline model (Random Forest).")
-        baseline_model = joblib.load("out/baseline.joblib")
+        bundle = joblib.load("out/baseline.joblib")
+        baseline_model = bundle["model"]
+        expected_features = [f.lower() for f in bundle["features"]]
 
-        # Normalize labels to binary
+        # Normalize labels
         df["label"] = normalize_labels(df["label"])
 
-        # Extract features (ignore label column)
-        X = df.drop(columns=["label"])
+        # Lowercase all column names for consistency
+        df.columns = [c.lower() for c in df.columns]
 
-        # --- Align feature names with training ---
-        expected_features = baseline_model.feature_names_in_
+        # Extract + align features
+        X = df.drop(columns=["label"])
+        missing_features = [col for col in expected_features if col not in X.columns]
+        extra_features = [col for col in X.columns if col not in expected_features + ["label"]]
+
         for col in expected_features:
             if col not in X.columns:
                 X[col] = 0
-        X = X[expected_features]  # drop extras + reorder
+        X = X[expected_features].astype(float)
 
-        # --- Predict probabilities ---
+        # 🔍 Sidebar diagnostics
+        st.sidebar.subheader("📋 Feature Diagnostics")
+        st.sidebar.write(f"**Expected features ({len(expected_features)}):** {expected_features}")
+        st.sidebar.write(f"**Missing in file:** {missing_features if missing_features else 'None ✅'}")
+        st.sidebar.write(f"**Extra in file (ignored):** {extra_features if extra_features else 'None ✅'}")
+
+        # Predict probabilities
         probs = baseline_model.predict_proba(X)[:, 1]  # probability of Abnormal
         preds = (probs >= prob_threshold).astype(int)
 
@@ -87,12 +99,12 @@ if uploaded_file is not None:
         st.subheader("Baseline Predictions")
         st.write(pred_labels)
 
-        # Show percentages
+        # Percentages
         counts = pd.Series(pred_labels).value_counts(normalize=True) * 100
         st.bar_chart(counts)
 
-        # --- Confusion Matrix (normalized %) ---
-        cm = confusion_matrix(df["label"], preds, labels=[0,1])
+        # Confusion Matrix
+        cm = confusion_matrix(df["label"], preds, labels=[0, 1])
         cm_norm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
 
         cm_labels = ["Normal", "Abnormal"]
@@ -111,14 +123,12 @@ if uploaded_file is not None:
         )
         st.plotly_chart(cm_fig, use_container_width=True)
 
-        # --- Metrics: F1 + AUROC + False alarms/hour ---
+        # Metrics
         try:
             f1 = f1_score(df["label"], preds)
             auroc = roc_auc_score(df["label"], probs)
-
-            # false alarms = predicted Abnormal but actually Normal
             false_alarms = ((df["label"] == 0) & (preds == 1)).sum()
-            hours = len(df) * (win_sec / 3600.0)  # dataset duration in hours
+            hours = len(df) * (win_sec / 3600.0)
             false_alarms_per_hour = false_alarms / hours if hours > 0 else 0
 
             st.metric("F1 Score", f"{f1:.3f}")
@@ -127,7 +137,7 @@ if uploaded_file is not None:
         except Exception as e:
             st.warning(f"⚠️ Could not compute metrics: {e}")
 
-        # --- ALERT LOGIC (N consecutive abnormal windows) ---
+        # Alert logic
         consec_count = 0
         alert_triggered = False
         for p in preds:
@@ -146,7 +156,7 @@ if uploaded_file is not None:
         else:
             st.success("✅ Normal rhythm detected across dataset", icon="💓")
 
-    # --- CASE 2: Raw ECG signal (deep CNN) ---
+    # --- CASE 2: Raw ECG signal (deep CNN, multi-window) ---
     elif "ecg" in df.columns:
         st.info("📈 Detected **raw ECG signal** → using deep CNN model.")
 
@@ -158,34 +168,49 @@ if uploaded_file is not None:
         fig.update_layout(title="ECG Waveform", xaxis_title="Sample", yaxis_title="Amplitude")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Preprocess signal
-        max_len = 3000
-        sig_proc = np.zeros(max_len)
-        sig_proc[: min(len(signal), max_len)] = signal[:max_len]
+        # Split into windows
+        win_size = win_sec * fs
+        n_windows = int(np.ceil(len(signal) / win_size))
+        probs_all, preds_all = [], []
 
-        x = torch.tensor(sig_proc, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+        for i in range(n_windows):
+            start = i * win_size
+            end = min((i + 1) * win_size, len(signal))
+            window = signal[start:end]
 
-        # Predict
-        with torch.no_grad():
-            outputs = model(x)
-            probs = torch.nn.functional.softmax(outputs, dim=1).numpy()[0]
-            predicted_class = np.argmax(probs)
+            # Pad/truncate to 3000 samples
+            max_len = 3000
+            sig_proc = np.zeros(max_len)
+            sig_proc[: min(len(window), max_len)] = window[:max_len]
 
-        classes = ["Normal", "Abnormal"]
-        pred_label = classes[predicted_class]
+            x = torch.tensor(sig_proc, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
 
-        st.subheader("CNN Prediction")
-        st.write(f"**Class:** {pred_label}")
-        st.write(f"**Confidence:** {probs[predicted_class]:.2f}")
+            with torch.no_grad():
+                outputs = model(x)
+                probs = torch.nn.functional.softmax(outputs, dim=1).numpy()[0]
+                probs_all.append(probs[1])
+                preds_all.append(1 if probs[1] >= prob_threshold else 0)
 
-        # Probabilities chart
-        prob_fig = go.Figure([go.Bar(x=classes, y=probs)])
-        prob_fig.update_layout(title="Class Probabilities")
-        st.plotly_chart(prob_fig, use_container_width=True)
+        # Display window-level probabilities
+        st.subheader("CNN Window Predictions")
+        st.line_chart(probs_all)
 
-        # --- ALERT LOGIC (threshold + N-consecutive) ---
-        if probs[1] >= prob_threshold:
-            st.error("🚨 CRITICAL ALERT: Abnormal arrhythmia detected! 🚨")
+        # Alert logic
+        consec_count = 0
+        alert_triggered = False
+        for p in preds_all:
+            if p == 1:
+                consec_count += 1
+                if consec_count >= n_consecutive:
+                    alert_triggered = True
+                    break
+            else:
+                consec_count = 0
+
+        if alert_triggered:
+            st.error(f"🚨 CRITICAL ALERT: {n_consecutive} consecutive abnormal windows detected! 🚨")
+        elif any(preds_all):
+            st.warning("⚠️ Some abnormal windows detected (not consecutive).")
         else:
             st.success("✅ Normal rhythm detected", icon="💓")
 

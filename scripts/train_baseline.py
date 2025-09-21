@@ -17,8 +17,7 @@ def main(data_path, out_path):
         # If no labels, create dummy binary ones
         df["label"] = np.random.randint(0, 2, size=len(df))
     else:
-        df["label"] = df["label"].astype(str).str.upper()  # normalize case
-        df["label"] = df["label"].replace({
+        df["label"] = df["label"].astype(str).str.upper().replace({
             "NORMAL": 0,
             "N": 0,
             "AF": 1,
@@ -26,15 +25,21 @@ def main(data_path, out_path):
             "PVC": 1,
             "ABNORMAL": 1
         })
-        # Anything unmapped → 1 (treat as abnormal)
-        df["label"] = df["label"].apply(lambda x: 0 if x == 0 else 1)
+        # Anything unmapped → Abnormal (1)
+        df["label"] = df["label"].apply(lambda x: 0 if str(x) == "0" else 1)
 
-    # Keep only numeric feature columns
+    # --- Keep only numeric feature columns ---
     feature_cols = [c for c in df.columns if c != "label" and pd.api.types.is_numeric_dtype(df[c])]
     X = df[feature_cols].astype(float)
     y = df["label"].astype(int)
 
-    # Train/test split
+    # 🔑 Normalize feature names to lowercase for consistency
+    X.columns = [c.lower() for c in X.columns]
+    feature_cols = list(X.columns)
+
+    print(f"✅ Using {len(feature_cols)} features: {feature_cols}")
+
+    # --- Train/test split ---
     if len(df) < 5:
         print("⚠️ Very small dataset — training on all data (no split).")
         X_train, y_train, X_test, y_test = X, y, X, y
@@ -43,11 +48,11 @@ def main(data_path, out_path):
             X, y, test_size=0.2, random_state=42, stratify=y
         )
 
-    # Train model
-    clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    # --- Train model ---
+    clf = RandomForestClassifier(n_estimators=200, random_state=42)
     clf.fit(X_train, y_train)
 
-    # Evaluate
+    # --- Evaluate ---
     if len(X_test) > 0:
         preds = clf.predict(X_test)
         print("=== Classification Report (Binary: Normal=0, Abnormal=1) ===")
@@ -57,11 +62,15 @@ def main(data_path, out_path):
     else:
         print("⚠️ No test set available, skipping evaluation.")
 
-    # Save model
+    # --- Save model + lowercase feature names ---
+    model_bundle = {
+        "model": clf,
+        "features": feature_cols
+    }
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    joblib.dump(clf, out_path)
-    print(f"✅ Baseline model saved to {out_path}")
+    joblib.dump(model_bundle, out_path)
 
+    print(f"✅ Baseline model + lowercase features saved to {out_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train baseline arrhythmia model")
