@@ -6,53 +6,58 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
-from sklearn.utils.multiclass import unique_labels
 import joblib
 
 def main(data_path, out_path):
     # Load CSV
     df = pd.read_csv(data_path)
 
-    # Create dummy labels if missing
+    # --- Normalize labels to binary ---
     if "label" not in df.columns:
-        df["label"] = np.random.randint(0, 2, size=len(df))  # 2 classes: Normal, Abnormal
+        # If no labels, create dummy binary ones
+        df["label"] = np.random.randint(0, 2, size=len(df))
+    else:
+        df["label"] = df["label"].astype(str).str.upper()  # normalize case
+        df["label"] = df["label"].replace({
+            "NORMAL": 0,
+            "N": 0,
+            "AF": 1,
+            "AFIB": 1,
+            "PVC": 1,
+            "ABNORMAL": 1
+        })
+        # Anything unmapped → 1 (treat as abnormal)
+        df["label"] = df["label"].apply(lambda x: 0 if x == 0 else 1)
 
-    # Define features and target
-    feature_cols = [c for c in df.columns if c != "label"]
-    X = df[feature_cols]
-    y = df["label"]
+    # Keep only numeric feature columns
+    feature_cols = [c for c in df.columns if c != "label" and pd.api.types.is_numeric_dtype(df[c])]
+    X = df[feature_cols].astype(float)
+    y = df["label"].astype(int)
 
-    # Handle very small datasets
+    # Train/test split
     if len(df) < 5:
         print("⚠️ Very small dataset — training on all data (no split).")
-        X_train, y_train = X, y
-        X_test, y_test = X, y
+        X_train, y_train, X_test, y_test = X, y, X, y
     else:
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42, stratify=y
         )
 
-    # Train baseline Random Forest
+    # Train model
     clf = RandomForestClassifier(n_estimators=100, random_state=42)
     clf.fit(X_train, y_train)
 
-    # Evaluate (only if we have a test set)
+    # Evaluate
     if len(X_test) > 0:
         preds = clf.predict(X_test)
-        labels_present = unique_labels(y_test, preds)
-        target_names = ["Normal", "Abnormal"]
-
         print("=== Classification Report (Binary: Normal=0, Abnormal=1) ===")
         print(classification_report(
-            y_test,
-            preds,
-            labels=labels_present,
-            target_names=[target_names[i] for i in labels_present]
+            y_test, preds, labels=[0, 1], target_names=["Normal", "Abnormal"]
         ))
     else:
         print("⚠️ No test set available, skipping evaluation.")
 
-    # Save model with joblib
+    # Save model
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     joblib.dump(clf, out_path)
     print(f"✅ Baseline model saved to {out_path}")

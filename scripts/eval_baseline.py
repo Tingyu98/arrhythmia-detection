@@ -2,53 +2,50 @@
 import argparse
 import pandas as pd
 import numpy as np
-import joblib
 from sklearn.metrics import classification_report
-import os
+from sklearn.utils.multiclass import unique_labels
+import joblib
 
-def main(data_path, model_path, out_path):
-    # Load features + labels
+def main(data_path, model_path):
+    # Load CSV
     df = pd.read_csv(data_path)
-    if "label" not in df.columns:
-        raise ValueError("❌ Input CSV must contain a 'label' column.")
 
-    X = df.drop(columns=["label"])
+    # Ensure labels exist
+    if "label" not in df.columns:
+        raise ValueError("❌ The dataset must contain a 'label' column for evaluation.")
+
+    # Ensure labels are numeric (map strings → ints if needed)
+    if df["label"].dtype == object:
+        df["label"] = df["label"].map({"Normal": 0, "Abnormal": 1})
+
+    # Keep only numeric feature columns
+    feature_cols = [c for c in df.columns if c != "label" and pd.api.types.is_numeric_dtype(df[c])]
+    X = df[feature_cols].astype(float)
     y = df["label"]
 
     # Load trained baseline model
-    model = joblib.load(model_path)
+    clf = joblib.load(model_path)
 
     # Predict
-    preds = model.predict(X)
+    preds = clf.predict(X)
 
-    # Define class names
-    classes = ["Normal", "Abnormal"]
-
-    # Adjust for cases where only one class is present in y
-    present_classes = np.unique(y)
-    labels = sorted(present_classes)
-    target_names = [classes[i] for i in labels]
-
-    # Generate report
-    report = classification_report(y, preds, labels=labels, target_names=target_names)
+    # Classification report
+    labels_present = unique_labels(y, preds)
+    target_names = ["Normal", "Abnormal"]
 
     print("=== Baseline Model Evaluation ===")
-    print(report)
-
-    # Save report
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w") as f:
-        f.write("=== Baseline Model Evaluation ===\n")
-        f.write(report)
-
-    print(f"✅ Evaluation report saved to {out_path}")
+    print(classification_report(
+        y,
+        preds,
+        labels=labels_present,
+        target_names=[target_names[i] for i in labels_present]
+    ))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate baseline arrhythmia model")
-    parser.add_argument("--data", type=str, required=True, help="Path to features CSV file")
-    parser.add_argument("--model", type=str, required=True, help="Path to trained baseline model")
-    parser.add_argument("--out", type=str, default="out/baseline_eval.txt", help="Output text file for report")
+    parser.add_argument("--data", type=str, required=True, help="Path to feature CSV file")
+    parser.add_argument("--model", type=str, required=True, help="Path to trained model file (.joblib)")
     args = parser.parse_args()
 
-    main(args.data, args.model, args.out)
+    main(args.data, args.model)

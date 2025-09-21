@@ -64,16 +64,10 @@ def main():
     # Save
     out_df = pd.DataFrame(windows)
 
-    # --- Add dummy labels for demo/testing ---
-    if windows.shape[0] > 1:
-        labels = np.random.randint(0, 2, size=windows.shape[0])
-        # Ensure at least one Normal (0) and one Abnormal (1)
-        labels[0] = 0
-        labels[-1] = 1
-    else:
-        labels = np.array([0])  # fallback if only one window
-
+    # --- Add dummy labels as strings (Normal / Abnormal) ---
+    labels = np.random.choice(["Normal", "Abnormal"], size=windows.shape[0])
     out_df["label"] = labels
+
     out_df.to_csv(args.output, index=False)
 
     # Logs
@@ -81,12 +75,7 @@ def main():
     print(f"Window size: {args.win * args.fs} samples")
     print(f"Step size: {args.step * args.fs} samples")
     print(f"Number of windows created: {len(windows)}")
-    print(f"✅ Saved {windows.shape[0]} windows with guaranteed binary labels (0=Normal, 1=Abnormal) → {args.output}")
-
-    # 🔎 Show label distribution
-    unique, counts = np.unique(labels, return_counts=True)
-    label_counts = dict(zip(unique, counts))
-    print(f"Label distribution: {label_counts}")
+    print(f"✅ Saved {windows.shape[0]} windows with labels (Normal/Abnormal) to {args.output}")
 
 
 if __name__ == "__main__":

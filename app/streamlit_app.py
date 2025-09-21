@@ -7,9 +7,16 @@ import numpy as np
 import pandas as pd
 import torch
 import plotly.graph_objs as go
-from datetime import datetime
+import plotly.figure_factory as ff
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
 
 from src.models import SimpleCNN
+
+# --- Streamlit controls ---
+st.sidebar.header("⚙️ Settings")
+prob_threshold = st.sidebar.slider("Probability threshold", 0.0, 1.0, 0.6, 0.05)
+n_consecutive = st.sidebar.slider("N consecutive abnormal windows", 1, 10, 3)
+win_sec = st.sidebar.number_input("Window size (seconds)", 10, 60, 10)  # default 10s windows
 
 # --- Load CNN model ---
 MODEL_PATH = "out/cnn.pth"
@@ -31,6 +38,18 @@ def load_model():
 
 model = load_model()
 
+# --- Label normalization helper ---
+def normalize_labels(labels):
+    labels = labels.astype(str).str.upper()
+    return labels.replace({
+        "NORMAL": 0,
+        "N": 0,
+        "AF": 1,
+        "AFIB": 1,
+        "PVC": 1,
+        "ABNORMAL": 1
+    }).apply(lambda x: 0 if str(x) == "0" else 1)
+
 # --- Streamlit UI ---
 st.title("🫀 Arrhythmia Detection Demo: Normal vs Abnormal (PVC + AFib)")
 st.markdown("Upload either a **feature CSV** (with `label`) or a **raw ECG CSV** (with `ecg`).")
@@ -45,8 +64,22 @@ if uploaded_file is not None:
         st.info("📊 Detected **feature dataset** → using baseline model (Random Forest).")
         baseline_model = joblib.load("out/baseline.joblib")
 
+        # Normalize labels to binary
+        df["label"] = normalize_labels(df["label"])
+
+        # Extract features (ignore label column)
         X = df.drop(columns=["label"])
-        preds = baseline_model.predict(X)
+
+        # --- Align feature names with training ---
+        expected_features = baseline_model.feature_names_in_
+        for col in expected_features:
+            if col not in X.columns:
+                X[col] = 0
+        X = X[expected_features]  # drop extras + reorder
+
+        # --- Predict probabilities ---
+        probs = baseline_model.predict_proba(X)[:, 1]  # probability of Abnormal
+        preds = (probs >= prob_threshold).astype(int)
 
         classes = ["Normal", "Abnormal"]
         pred_labels = [classes[p] for p in preds]
@@ -54,31 +87,64 @@ if uploaded_file is not None:
         st.subheader("Baseline Predictions")
         st.write(pred_labels)
 
-        # Show counts
-        counts = pd.Series(pred_labels).value_counts()
+        # Show percentages
+        counts = pd.Series(pred_labels).value_counts(normalize=True) * 100
         st.bar_chart(counts)
 
-        # --- ALERT LOGIC ---
-        if "Abnormal" in pred_labels:
-            st.error("🚨 WARNING: Abnormal arrhythmia detected in dataset! 🚨")
+        # --- Confusion Matrix (normalized %) ---
+        cm = confusion_matrix(df["label"], preds, labels=[0,1])
+        cm_norm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
+
+        cm_labels = ["Normal", "Abnormal"]
+        cm_fig = ff.create_annotated_heatmap(
+            z=np.round(cm_norm*100, 1),
+            x=cm_labels,
+            y=cm_labels,
+            annotation_text=np.array([["{:.1f}%".format(v) for v in row] for row in cm_norm*100]),
+            colorscale="Blues",
+            showscale=True
+        )
+        cm_fig.update_layout(
+            title="Confusion Matrix (Normalized %)",
+            xaxis_title="Predicted",
+            yaxis_title="True"
+        )
+        st.plotly_chart(cm_fig, use_container_width=True)
+
+        # --- Metrics: F1 + AUROC + False alarms/hour ---
+        try:
+            f1 = f1_score(df["label"], preds)
+            auroc = roc_auc_score(df["label"], probs)
+
+            # false alarms = predicted Abnormal but actually Normal
+            false_alarms = ((df["label"] == 0) & (preds == 1)).sum()
+            hours = len(df) * (win_sec / 3600.0)  # dataset duration in hours
+            false_alarms_per_hour = false_alarms / hours if hours > 0 else 0
+
+            st.metric("F1 Score", f"{f1:.3f}")
+            st.metric("AUROC", f"{auroc:.3f}")
+            st.metric("False Alarms/hour", f"{false_alarms_per_hour:.2f}")
+        except Exception as e:
+            st.warning(f"⚠️ Could not compute metrics: {e}")
+
+        # --- ALERT LOGIC (N consecutive abnormal windows) ---
+        consec_count = 0
+        alert_triggered = False
+        for p in preds:
+            if p == 1:
+                consec_count += 1
+                if consec_count >= n_consecutive:
+                    alert_triggered = True
+                    break
+            else:
+                consec_count = 0
+
+        if alert_triggered:
+            st.error(f"🚨 WARNING: {n_consecutive} consecutive abnormal windows detected! 🚨")
+        elif "Abnormal" in pred_labels:
+            st.warning("⚠️ Some abnormal windows detected (not consecutive).")
         else:
             st.success("✅ Normal rhythm detected across dataset", icon="💓")
-
-        # --- Save report to file (append mode) ---
-        os.makedirs("out", exist_ok=True)
-        report_path = os.path.join("out", "streamlit_eval.txt")
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        with open(report_path, "a") as f:
-            f.write("\n" + "=" * 50 + "\n")
-            f.write(f"📅 Evaluation Run at {timestamp}\n")
-            f.write("=" * 50 + "\n")
-            f.write("Predictions:\n")
-            f.write("\n".join(pred_labels) + "\n")
-            f.write("\nClass counts:\n")
-            f.write(str(counts) + "\n")
-
-        st.success(f"📁 Evaluation report appended to {report_path}")
 
     # --- CASE 2: Raw ECG signal (deep CNN) ---
     elif "ecg" in df.columns:
@@ -117,25 +183,11 @@ if uploaded_file is not None:
         prob_fig.update_layout(title="Class Probabilities")
         st.plotly_chart(prob_fig, use_container_width=True)
 
-        # --- ALERT LOGIC ---
-        if pred_label != "Normal":
+        # --- ALERT LOGIC (threshold + N-consecutive) ---
+        if probs[1] >= prob_threshold:
             st.error("🚨 CRITICAL ALERT: Abnormal arrhythmia detected! 🚨")
         else:
             st.success("✅ Normal rhythm detected", icon="💓")
-
-        # --- Save report to file (append mode) ---
-        os.makedirs("out", exist_ok=True)
-        report_path = os.path.join("out", "streamlit_eval.txt")
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        with open(report_path, "a") as f:
-            f.write("\n" + "=" * 50 + "\n")
-            f.write(f"📅 CNN Evaluation Run at {timestamp}\n")
-            f.write("=" * 50 + "\n")
-            f.write(f"Prediction: {pred_label}\n")
-            f.write(f"Probabilities: {dict(zip(classes, probs))}\n")
-
-        st.success(f"📁 CNN evaluation report appended to {report_path}")
 
     # --- CASE 3: Unsupported format ---
     else:
