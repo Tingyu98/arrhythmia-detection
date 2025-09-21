@@ -1,73 +1,70 @@
 <<<<<<< HEAD
-# arrhythmia-detection
-Using AI/ML in python to detect arrhythmias in the heart from ECG signals using both baseline ML models and a deep CNN, with a streamlit app for demo.
-=======
 # Arrhythmia Detection Hackathon (PyTorch)
 
-## Features:
-- Binary classification: Normal vs Abnormal (AFib + PVC combined).
+Using AI/ML in Python to detect arrhythmias in the heart from ECG signals, combining **baseline ML models** and a **deep CNN**, with a Streamlit app for interactive demo.
+
+---
+
+## 🚀 Features
+- Binary classification: **Normal vs Abnormal** (AFib + PVC combined).
 - Baseline model (Random Forest) trained on extracted ECG features.
 - Deep CNN trained directly on raw ECG signals.
 - Streamlit app for live demo:
-   - Upload feature CSVs or raw ECG signals.
+   - Upload **feature CSVs** or **raw ECG signals**.
    - Probability bars and class confidence.
-   - Alert logic: configurable N consecutive abnormal windows.
-   - Sliders to adjust:
-      - Probability threshold
-      - N consecutive abnormal windows
-   - Baseline predictions shown as percentages instead of raw counts.
-- Summary panel (planned): AUROC, F1, false alarms/hour
+   - Configurable alert logic: **N consecutive abnormal windows**.
+   - Adjustable sliders:
+      - Probability threshold  
+      - N consecutive abnormal windows  
+   - Baseline predictions shown as **percentages instead of counts**.
+   - Metrics panel: **AUROC, F1, false alarms/hour**.
+   - Confusion matrix visualization.
+
+---
 
 ## 🧹 Preprocessing Pipeline (Day 1)
 
-Before training, we clean and segment the raw ECG signals so our models work with consistent, noise-free data.
-
-### Steps:
+### Steps
 1. **Load ECG Data**
    - Input CSV with a column named `ecg`  
    - Example: `test_data/test_ecg.csv`  
 
 2. **Band-Pass Filtering**
    - Removes baseline wander and high-frequency noise  
-   - Filter range: **0.5–40 Hz** (standard for arrhythmia detection)  
+   - Filter range: **0.5–40 Hz**
 
 3. **Segmentation into Windows**
-   - ECG is split into **10-second windows** with **5-second step size**  
-   - Each window becomes one model input  
+   - ECG split into **10-second windows** with **5-second step size**
 
 4. **R-Peak Detection (Demo)**
-   - Peaks in the QRS complex are identified  
-   - Enables feature extraction: RR intervals and heart rate variability (HRV)  
+   - QRS complexes identified  
+   - Enables RR interval and HRV feature extraction  
 
 5. **Save Processed Data**
-   - Exported to: `data/processed/windows.csv`  
-   - Ready for baseline ML (logistic regression, random forest) or deep CNNs  
-
-### Example Output
-| Sample 0 | Sample 1 | ... | Sample N |
-|----------|----------|-----|----------|
-| 0.12     | 0.15     | ... | -0.07    |
-| 0.10     | 0.18     | ... | -0.05    |
-| ...      | ...      | ... | ...      |
-
-Each row = one **10-second ECG window**.
+   - Exported to `data/processed/windows.csv`
 
 ---
 
-**Day 2: model training & evaluation**
+## 🧠 Day 2: Model Training & Evaluation
 
-- Baseline (Random Forest):
-   - Trains on features.csv.
-   - Evaluated with sklearn classification_report.
-- Deep CNN:
-   - Input: raw ECG windows (length 3000).
-   - Output: binary classification.
-   - Saved to out/cnn.pth.
+### Baseline (Random Forest)
+- Trains on `features.csv`
+- Evaluated with sklearn `classification_report`
 
-**Day 3: Streamlit pp**
-````bash
+### Deep CNN
+- Input: raw ECG windows (length 3000)
+- Output: binary classification
+- Saved to `out/cnn.pth`
+
+---
+
+## 🎛️ Day 3: Integration & Streamlit Demo
+
+Run the app:
+```bash
 streamlit run app/streamlit_app.py
 ````
+
 ## Inputs:
    - Raw ECG signal: CSV with column ecg.
    - Feature dataset: CSV with numeric features + label column.
@@ -77,11 +74,16 @@ streamlit run app/streamlit_app.py
 - ⚠️ Warning when threshold exceeded
 - 🚨 Critical alert if N consecutive abnormal windows cross threshold
 
+## Summary Metrics
+- F1 Score
+- AUROC
+- False alarms per hour
+
 ## Requirements:
 - Python 3.10+
 - PyTorch
 - Streamlit
-- NumPy, Pandas, scikit-learn, Plotly
+- NumPy, Pandas, scikit-learn, Plotly, neurokit2
 
 ## Instructions:
 ```bash
@@ -92,9 +94,9 @@ cd arrhythmia-detection-hackathon
 ```bash
 python -m venv .venv
 .\.venv\Scripts\activate   # Windows
-# or
 source .venv/bin/activate  # Mac/Linux
 
+# Install dependencies
 pip install -r requirements.txt
 ```
 Usage Examples
@@ -113,24 +115,47 @@ Train CNN:
 ````bash
 python scripts/train_deep.py --epochs 3
 ````
+## DEMO Instructions:
 
-## Run the streamlit app
+Run the streamlit app
 ```bash
 streamlit run app/streamlit_app.py
 ```
+Upload a CSV file:
+- Raw ECG → must contain a column named ecg
+- Feature dataset → must contain numeric features + label
+
+Adjust sidebar sliders:
+- Probability threshold
+- N consecutive abnormal windows
+
+View:
+- Predicted classes and probabilities
+- Bar chart of percentages
+- Confusion matrix (baseline model)
+- Metrics: AUROC, F1, false alarms/hour
+- Alert messages when conditions are met
+
 arrhythmia-detection-hackathon/
 │
 ├── app/                 # Streamlit UI
 │   └── streamlit_app.py
-├── scripts/             # Training scripts
-│   ├── train_deep.py
-│   └── train_baseline.py
-├── src/                 # Models
-│   └── models.py
+├── scripts/             # Training + preprocessing scripts
+│   ├── make_windows.py
+│   ├── make_features.py
+│   ├── train_baseline.py
+│   ├── eval_baseline.py
+│   └── train_deep.py
+├── src/                 # Models + feature extraction
+│   ├── models.py
+│   └── features.py
+├── data/                # Processed data (not tracked in Git)
+│   └── processed/
 ├── test_data/           # Sample ECG/test CSVs
 ├── out/                 # Saved models
 ├── requirements.txt     # Dependencies
 └── README.md
+
 
 ## Partner Contribution – Modeling & Experimentation
 
