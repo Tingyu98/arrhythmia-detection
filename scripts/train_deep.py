@@ -1,4 +1,6 @@
 import argparse, os, numpy as np
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -44,9 +46,9 @@ def main():
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     # ✅ Save only the weights (simpler for loading in app)
     torch.save({
-    "input_len": maxlen,   # ✅ use actual input length
-    "state_dict": model.state_dict()
-}, args.out)
+        "input_len": maxlen,   # ✅ use actual input length
+        "state_dict": model.state_dict()
+    }, args.out)
 
     print("✅ Model saved to out/cnn.pth")
 

@@ -58,7 +58,7 @@ if uploaded_file is not None:
         st.bar_chart(counts)
 
         # --- ALERT LOGIC ---
-        if "PVC" in pred_labels:
+        if "Abnormal" in pred_labels:
             st.error("🚨 WARNING: Abnormal arrhythmia detected in dataset! 🚨")
         else:
             st.success("✅ Normal rhythm detected across dataset", icon="💓")
