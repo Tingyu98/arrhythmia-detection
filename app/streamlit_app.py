@@ -10,7 +10,7 @@ import plotly.graph_objs as go
 
 from src.models import SimpleCNN
 
-# --- Load model ---
+# --- Load CNN model ---
 MODEL_PATH = "out/cnn.pth"
 
 @st.cache_resource
@@ -18,25 +18,21 @@ def load_model():
     checkpoint = torch.load(MODEL_PATH, map_location="cpu")
 
     if "state_dict" in checkpoint:
-        # Use the input_len saved during training
         input_len = checkpoint.get("input_len", 3000)
-        model = SimpleCNN(input_len=input_len, n_classes=3)
+        model = SimpleCNN(input_len=input_len, n_classes=2)
         model.load_state_dict(checkpoint["state_dict"])
     else:
-        # Fallback for old checkpoints (no input_len stored)
-        model = SimpleCNN(input_len=3000, n_classes=3)
+        model = SimpleCNN(input_len=3000, n_classes=2)
         model.load_state_dict(checkpoint)
 
     model.eval()
     return model
 
-
-
 model = load_model()
 
 # --- Streamlit UI ---
-st.title("🫀 Arrhythmia Detection Demo")
-st.markdown("Upload an ECG CSV file with a column named **`ecg`** to analyze.")
+st.title("🫀 Arrhythmia Detection Demo: Normal vs Abnormal (PVC + AFib)")
+st.markdown("Upload either a **feature CSV** (with `label`) or a **raw ECG CSV** (with `ecg`).")
 
 uploaded_file = st.file_uploader("Upload ECG or feature CSV", type=["csv"])
 
@@ -45,34 +41,31 @@ if uploaded_file is not None:
 
     # --- CASE 1: Feature dataset (baseline model) ---
     if "label" in df.columns:
-        st.write("📊 Detected **feature dataset**. Using baseline model...")
+        st.info("📊 Detected **feature dataset** → using baseline model (Random Forest).")
         baseline_model = joblib.load("out/baseline.joblib")
 
         X = df.drop(columns=["label"])
         preds = baseline_model.predict(X)
 
-        classes = ["Normal", "AFib", "PVC"]
+        classes = ["Normal", "Abnormal"]
         pred_labels = [classes[p] for p in preds]
 
         st.subheader("Baseline Predictions")
         st.write(pred_labels)
-        
-        # Show counts as a bar chart
+
+        # Show counts
         counts = pd.Series(pred_labels).value_counts()
         st.bar_chart(counts)
 
         # --- ALERT LOGIC ---
         if "PVC" in pred_labels:
-            st.error("🚨 CRITICAL ALERT: PVC arrhythmia detected in dataset! 🚨")
-        elif "AFib" in pred_labels:
-            st.warning("⚠️ Warning: Possible AFib arrhythmia detected in dataset")
+            st.error("🚨 WARNING: Abnormal arrhythmia detected in dataset! 🚨")
         else:
             st.success("✅ Normal rhythm detected across dataset", icon="💓")
 
-
     # --- CASE 2: Raw ECG signal (deep CNN) ---
     elif "ecg" in df.columns:
-        st.write("📈 Detected **raw ECG signal**. Using deep CNN model...")
+        st.info("📈 Detected **raw ECG signal** → using deep CNN model.")
 
         signal = df["ecg"].values
 
@@ -82,7 +75,7 @@ if uploaded_file is not None:
         fig.update_layout(title="ECG Waveform", xaxis_title="Sample", yaxis_title="Amplitude")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Preprocess signal (pad/truncate)
+        # Preprocess signal
         max_len = 3000
         sig_proc = np.zeros(max_len)
         sig_proc[: min(len(signal), max_len)] = signal[:max_len]
@@ -95,10 +88,10 @@ if uploaded_file is not None:
             probs = torch.nn.functional.softmax(outputs, dim=1).numpy()[0]
             predicted_class = np.argmax(probs)
 
-        classes = ["Normal", "AFib", "PVC"]
+        classes = ["Normal", "Abnormal"]
         pred_label = classes[predicted_class]
 
-        st.subheader("Prediction")
+        st.subheader("CNN Prediction")
         st.write(f"**Class:** {pred_label}")
         st.write(f"**Confidence:** {probs[predicted_class]:.2f}")
 
@@ -109,10 +102,7 @@ if uploaded_file is not None:
 
         # --- ALERT LOGIC ---
         if pred_label != "Normal":
-            if pred_label == "PVC":
-                st.error("🚨 CRITICAL ALERT: PVC arrhythmia detected! 🚨")
-            else:
-                st.warning(f"⚠️ Warning: Possible {pred_label} arrhythmia detected")
+            st.error("🚨 CRITICAL ALERT: Abnormal arrhythmia detected! 🚨")
         else:
             st.success("✅ Normal rhythm detected", icon="💓")
 

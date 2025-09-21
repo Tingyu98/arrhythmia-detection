@@ -23,9 +23,16 @@ def make_windows(signal, fs=360, win_sec=10, step_sec=5):
     step_size = int(step_sec * fs)
     windows = []
 
-    for start in range(0, len(signal) - win_size + 1, step_size):
-        end = start + win_size
-        windows.append(signal[start:end])
+    if len(signal) < win_size:
+        # Pad short signals with zeros to make one full window
+        padded = np.zeros(win_size)
+        padded[:len(signal)] = signal
+        windows.append(padded)
+    else:
+        for start in range(0, len(signal) - win_size + 1, step_size):
+            end = start + win_size
+            windows.append(signal[start:end])
+
     return np.array(windows)
 
 # ----------------------------
@@ -56,12 +63,20 @@ def main():
 
     # Save
     out_df = pd.DataFrame(windows)
+
+    # --- Add dummy labels for demo/testing ---
+    labels = np.random.randint(0, 2, size=windows.shape[0])  # 0=Normal, 1=Abnormal
+    out_df["label"] = labels
+
     out_df.to_csv(args.output, index=False)
+
+    # Logs
     print(f"Raw signal length: {len(raw_signal)} samples")
     print(f"Window size: {args.win * args.fs} samples")
     print(f"Step size: {args.step * args.fs} samples")
     print(f"Number of windows created: {len(windows)}")
-    print(f"✅ Saved {windows.shape[0]} windows to {args.output}")
+    print(f"✅ Saved {windows.shape[0]} windows with binary labels (0=Normal, 1=Abnormal) {args.output}")
+
 
 if __name__ == "__main__":
     main()

@@ -17,7 +17,7 @@ def main():
     # --- Fake ECG windows for demo (replace with real preprocessing) ---
     np.random.seed(0)
     X = np.random.randn(200, 3000).astype(np.float32)  # 200 windows of length 3000
-    y = np.random.randint(0, 3, size=200)
+    y = np.random.randint(0, 2, size=200)
 
     maxlen = X.shape[1]
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
@@ -25,7 +25,7 @@ def main():
     Xte, yte = torch.tensor(Xte).unsqueeze(1), torch.tensor(yte, dtype=torch.long)
 
     # --- Model ---
-    model = SimpleCNN(input_len=maxlen, n_classes=3)
+    model = SimpleCNN(input_len=maxlen, n_classes=2)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
