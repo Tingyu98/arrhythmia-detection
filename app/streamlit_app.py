@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 import plotly.graph_objs as go
+from datetime import datetime
 
 from src.models import SimpleCNN
 
@@ -63,6 +64,22 @@ if uploaded_file is not None:
         else:
             st.success("✅ Normal rhythm detected across dataset", icon="💓")
 
+        # --- Save report to file (append mode) ---
+        os.makedirs("out", exist_ok=True)
+        report_path = os.path.join("out", "streamlit_eval.txt")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        with open(report_path, "a") as f:
+            f.write("\n" + "=" * 50 + "\n")
+            f.write(f"📅 Evaluation Run at {timestamp}\n")
+            f.write("=" * 50 + "\n")
+            f.write("Predictions:\n")
+            f.write("\n".join(pred_labels) + "\n")
+            f.write("\nClass counts:\n")
+            f.write(str(counts) + "\n")
+
+        st.success(f"📁 Evaluation report appended to {report_path}")
+
     # --- CASE 2: Raw ECG signal (deep CNN) ---
     elif "ecg" in df.columns:
         st.info("📈 Detected **raw ECG signal** → using deep CNN model.")
@@ -105,6 +122,20 @@ if uploaded_file is not None:
             st.error("🚨 CRITICAL ALERT: Abnormal arrhythmia detected! 🚨")
         else:
             st.success("✅ Normal rhythm detected", icon="💓")
+
+        # --- Save report to file (append mode) ---
+        os.makedirs("out", exist_ok=True)
+        report_path = os.path.join("out", "streamlit_eval.txt")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        with open(report_path, "a") as f:
+            f.write("\n" + "=" * 50 + "\n")
+            f.write(f"📅 CNN Evaluation Run at {timestamp}\n")
+            f.write("=" * 50 + "\n")
+            f.write(f"Prediction: {pred_label}\n")
+            f.write(f"Probabilities: {dict(zip(classes, probs))}\n")
+
+        st.success(f"📁 CNN evaluation report appended to {report_path}")
 
     # --- CASE 3: Unsupported format ---
     else:
