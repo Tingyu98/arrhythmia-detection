@@ -1,9 +1,8 @@
 <<<<<<< HEAD
-# Arrhythmia Detection Hackathon (PyTorch)
+# Arrhythmia Detection Hackathon 
 
-Using AI/ML in Python to detect arrhythmias in the heart from ECG signals, combining **baseline ML models** and a **deep CNN**, with a Streamlit app for interactive demo.
-
----
+## Overview
+This project leverages AI and Machine Learning in Python to detect cardiac arrhythmias from ECG signals. Using both feature-based machine learning models and a deep convolutional neural network (CNN), the goal is to identify abnormal heart rhythms such as atrial fibrillation (AFib) and premature ventricular contractions (PVC). A Streamlit web app was developed to visualize predictions in real time, allowing users to upload ECG data and monitor abnormal rhythm alerts interactively.
 
 ## 🚀 Features
 - Binary classification: **Normal vs Abnormal** (AFib + PVC combined).
