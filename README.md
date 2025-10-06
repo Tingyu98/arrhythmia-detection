@@ -74,21 +74,21 @@ Extracted physiological and statistical features per ECG window:
 
 ## Project Structure
 arrhythmia-detection-hackathon/
-├── app/                 # Streamlit UI
+├── app/                    # Streamlit UI
 │   └── streamlit_app.py
-├── scripts/             # Training + preprocessing
+├── scripts/                # Training + preprocessing scripts
 │   ├── make_windows.py
 │   ├── make_features.py
 │   ├── train_baseline.py
 │   ├── eval_baseline.py
 │   └── train_deep.py
-├── src/                 # Models + feature extraction
+├── src/                    # Models + feature extraction
 │   ├── models.py
 │   └── features.py
-├── data/processed/      # Processed ECG data
-├── test_data/           # Sample ECG CSVs
-├── out/                 # Saved models (.pth, .joblib)
-└── requirements.txt
+├── data/processed/         # Processed ECG data
+├── test_data/              # Sample ECG CSVs
+├── out/                    # Saved models (.pth, .joblib)
+└── requirements.txt        # Dependencies
 
 
 
