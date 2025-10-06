@@ -73,6 +73,8 @@ Extracted physiological and statistical features per ECG window:
 * Interactive Demo: Streamlit app enables live testing and visualization for educational and diagnostic exploration.
 
 ## Project Structure
+
+``plaintext
 arrhythmia-detection-hackathon/
 ├── app/                    # Streamlit UI
 │   └── streamlit_app.py
